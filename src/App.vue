@@ -1,268 +1,234 @@
-
+//侧边栏里的 RouterLink 负责跳转，RouterView 则负责显示当前页面。收起按钮会缩窄侧边栏，让右侧内容获得更多空间。
 <script setup>
-import {ref,onMounted} from 'vue'
-import request from './api/request'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref } from 'vue'
+import { useRoute } from 'vue-router'
 
-const title = ref('Memory')
-const memories= ref([])
-const showForm=ref(false)
-const form = ref(createEmptyForm())
-const isEdit = ref(false)
+const route = useRoute()
+const sidebarOpen = ref(true)
 
-async function loadMemories(){
-        const m=await request.get('/memories')
-        memories.value=m.data
-}
-onMounted(()=>{
-    loadMemories()
-})
-function handleAdd() {
-    resetForm()
-    isEdit.value = false
-    showForm.value=true
-}
-
-function createEmptyForm() {
-    return {
-        title: '',
-        feeling: '',
-        type: '',
-        favorite: false,
-        discoverDate: '',
-        tags: []
-    }
-}
-function resetForm() {
-    form.value = createEmptyForm()
-}
-
-async function handleSubmit() {
-    if (!form.value.title.trim()) {
-        ElMessage.warning('请输入记录标题')
-        return
-    }
-
-    if (!form.value.type) {
-        ElMessage.warning('请选择记录类型')
-        return
-    }
-
-    try {
-        if (isEdit.value) {
-            await request.put(`/memories/${form.value.id}`, form.value)
-        } else {
-            await request.post('/memories', form.value)
-        }
-        await loadMemories()
-
-        ElMessage.success('记录添加成功')
-        resetForm()
-        showForm.value = false
-    } catch (error) {
-        console.error('新增记录失败：', error)
-        ElMessage.error('保存失败，请检查后端服务或输入内容')
-    }
-}
-
-function handleCancel() {
-    resetForm()
-    showForm.value = false
-}
-
-
-async function handleDelete(row) {
-    try {
-        await ElMessageBox.confirm(
-            `确定删除「${row.title}」吗？删除后无法恢复。`,
-            '删除记录',
-            {
-                confirmButtonText: '删除',
-                cancelButtonText: '取消',
-                type: 'warning'
-            }
-        )
-
-        await request.delete(`/memories/${row.id}`)
-        await loadMemories()
-
-        ElMessage.success('删除成功')
-    } catch (error) {
-        // 用户取消确认时，不执行删除
-        if (error === 'cancel' || error === 'close') {
-            return
-        }
-
-        console.error('删除记录失败：', error)
-        ElMessage.error('删除失败，请检查后端服务')
-    }
-}
-
-function handleEdit(row) {
-    isEdit.value = true
-
-    form.value = {
-        id: row.id,
-        title: row.title ?? '',
-        feeling: row.feeling ?? '',
-        type: row.type ?? '',
-        favorite: row.favorite ?? false,
-        discoverDate: row.discoverDate ?? '',
-        tags: row.tags ?? []
-    }
-
-    showForm.value = true
-}
-
+const menuItems = [
+  { path: '/memories', label: '全部记录', icon: '▤' },
+  { path: '/timeline', label: '时间线', icon: '◷' },
+  { path: '/calendar', label: '月历', icon: '▦' },
+  { path: '/tags', label: '标签管理', icon: '◇' }
+]
 </script>
 
 <template>
-    <div class="page">
-        <div class="header">
-            <h1>{{title}}</h1>
-            <p>记录值得再次回味的事物。</p>
-        </div>    
+  <div class="app-layout">
+  
+    <aside class="sidebar" :class="{ collapsed: !sidebarOpen }">
+      <div class="brand">
+        <div class="brand-icon">M</div>
+        <span v-if="sidebarOpen">Memory</span>
+      </div>
 
-        <div class="toolbar">
-            <h2>我的收藏</h2>
-            <el-button type="primary"@click="handleAdd">＋ 新增记录</el-button>
-        </div>
+      <p v-if="sidebarOpen" class="menu-caption">我的空间</p>
 
-        <el-dialog 
-            v-model="showForm"
-            title="新增记录"
-            width="500px"
+      <nav class="menu">
+        <RouterLink
+          v-for="item in menuItems"
+          :key="item.path"
+          :to="item.path"
+          class="menu-item"
+          :class="{ active: route.path === item.path }"
+          :title="item.label"
         >
-            
-            
-        <el-form label-position="top" class="memory-form">
-            <el-form-item label="标题" required>
-                <el-input
-                    v-model="form.title"
-                    placeholder="请输入标题"
-                    clearable
-                />
-            </el-form-item>
+          <span class="menu-icon">{{ item.icon }}</span>
+          <span v-if="sidebarOpen">{{ item.label }}</span>
+        </RouterLink>
+      </nav>
 
-            <el-form-item label="类型" required>
-                <el-select
-                    v-model="form.type"
-                    placeholder="请选择类型"
-                    style="width: 100%"
-                >
-                    <el-option label="书籍" value="BOOK" />
-                    <el-option label="电影" value="MOVIE" />
-                    <el-option label="音乐" value="MUSIC" />
-                    <el-option label="文章" value="ARTICLE" />
-                    <el-option label="辩论" value="DEBATE" />
-                </el-select>
-            </el-form-item>
+      <div class="sidebar-bottom">
+        <button class="collapse-button" @click="sidebarOpen = !sidebarOpen">
+          <span>{{ sidebarOpen ? '←' : '→' }}</span>
+          <span v-if="sidebarOpen">收起侧边栏</span>
+        </button>
+      </div>
+    </aside>
 
-            <el-form-item label="发现日期">
-                <el-date-picker
-                    v-model="form.discoverDate"
-                    type="date"
-                    placeholder="请选择发现日期"
-                    value-format="YYYY-MM-DD"
-                    style="width: 100%"
-                />
-            </el-form-item>
+    <main class="main-area">
+      <header class="topbar">
+        <span class="breadcrumb">Memory / {{ route.meta.title || '我的空间' }}</span>
+      </header>
 
-            <el-form-item label="喜欢这条记录吗？">
-                <el-switch v-model="form.favorite" />
-            </el-form-item>
-
-            <el-form-item label="感受与想法">
-                <el-input
-                    v-model="form.feeling"
-                    type="textarea"
-                    :rows="4"
-                    placeholder="记录值得再次回味的原因……"
-                    maxlength="1000"
-                    show-word-limit
-                />
-            </el-form-item>
-            </el-form>
-
-
-            <template #footer>
-                <el-button @click="handleCancel">取消</el-button>
-                <el-button type="primary" @click="handleSubmit">确定</el-button>
-            </template>
-        </el-dialog>
-
-            <el-table :data="memories">
-                <el-table-column prop="title" label="标题"/>
-                <el-table-column prop="type" label="类型"/>
-                <el-table-column label="喜欢">
-                    <template #default="scope">
-                        {{scope.row.favorite==true?'喜欢':'不喜欢'}}
-                    </template>
-                </el-table-column>
-                <el-table-column prop="discoverDate" label="发现日期"/>
-                <el-table-column prop="feeling" label="感受"/>
-                
-                <el-table-column label="操作" width="160" fixed="right">
-                    <template #default="scope">
-                        <el-button
-                            size="small"
-                            @click="handleEdit(scope.row)">编辑
-                        </el-button>
-
-                        <el-button
-                            size="small"
-                            type="danger"
-                            @click="handleDelete(scope.row)"
-                            >
-                            删除
-                        </el-button>
-                    </template>
-                </el-table-column>
-            </el-table>
-    </div> 
+      <div class="page-content">
+        <RouterView />
+      </div>
+    </main>
+  </div>
 </template>
 
 <style>
-.page{
-    max-width:2000px;
-    margin: 0 auto;
-    padding: 24px;
-}
-.header{
-    margin-bottom:20px;
-}
-.toolbar{
-    display: flex; /* 让子元素可以横向排列 */
-    align-items:center;/*让子元素垂直方向对齐 */
-    justify-content:space-between;/*把子元素分别推到左右两侧*/
-    gap:20px;/*设置子元素之间的间距*/
-    margin-bottom:20px;
+* {
+  box-sizing: border-box;
 }
 
-.memory-form {
-    padding: 8px 4px 0;
+body {
+  margin: 0;
+  background: #f8f8f4;
+  color: #354536;
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
-.memory-form :deep(.el-form-item) {
-    margin-bottom: 20px;
+.app-layout {
+  display: flex;
+  min-height: 100vh;
 }
 
-.memory-form :deep(.el-form-item__label) {
-    font-weight: 500;
-    color: #374151;
+.sidebar {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  width: 230px;
+  min-height: 100vh;
+  padding: 26px 16px 18px;
+  background: #edf0e7;
+  border-right: 1px solid #e2e6dc;
+  transition: width 0.2s ease;
 }
 
-.memory-form :deep(.el-textarea__inner) {
-    line-height: 1.7;
+.sidebar.collapsed {
+  width: 76px;
+  padding-right: 12px;
+  padding-left: 12px;
 }
 
-:deep(.el-dialog) {
-    border-radius: 12px;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+  color: #354b37;
+  font-size: 21px;
+  font-weight: 650;
 }
 
-:deep(.el-dialog__title) {
-    font-size: 20px;
-    font-weight: 600;
+.brand-icon {
+  display: grid;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  background: #526b50;
+  color: white;
+  font-family: Georgia, serif;
 }
 
+.menu-caption {
+  margin: 42px 8px 12px;
+  color: #879080;
+  font-size: 12px;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 9px;
+  color: #657160;
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.collapsed .menu-item {
+  justify-content: center;
+  padding: 0;
+}
+
+.menu-item:hover {
+  background: #e2e8dc;
+}
+
+.menu-item.active {
+  background: #dce5d5;
+  color: #344b36;
+  font-weight: 600;
+}
+
+.menu-icon {
+  display: grid;
+  width: 22px;
+  flex-shrink: 0;
+  place-items: center;
+  font-size: 19px;
+}
+
+.sidebar-bottom {
+  margin-top: auto;
+}
+
+.collapse-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 8px;
+  border: 0;
+  background: transparent;
+  color: #788373;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.main-area {
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  height: 66px;
+  padding: 0 34px;
+  border-bottom: 1px solid #e9e9e1;
+  background: #fbfbf8;
+}
+
+.breadcrumb {
+  color: #858a7f;
+  font-size: 13px;
+}
+
+.page-content {
+  padding: 34px;
+}
+
+@media (max-width: 700px) {
+  .sidebar {
+    width: 76px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .sidebar .brand > span,
+  .sidebar .menu-caption,
+  .sidebar .menu-item > span:not(.menu-icon),
+  .sidebar .collapse-button > span:not(:first-child) {
+    display: none;
+  }
+
+  .sidebar .menu-item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .page-content {
+    padding: 18px;
+  }
+
+  .topbar {
+    padding: 0 18px;
+  }
+}
 </style>
